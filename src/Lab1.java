@@ -152,49 +152,50 @@ public class Lab1 {
 
   public Lab1(int speed1, int speed2) {
     try {
-      // Initialise semaphores
-      for (int i = 0; i < Region.MAX.value; ++i) {
-        semaphores.add(new Semaphore(1));
-      }
+      initSemaphores();
+      initSensors();
+
       semaphores.get(Region.A.value).acquire();
       semaphores.get(Region.G.value).acquire();
-
-      // Initialise sensors
-      crossingSensors.put(new Position(1, 10), new CrossingSensor(new Position(3, 11), new ArrayList<SensorConfig>(
-          Arrays.asList(new SensorConfig(Region.G, Direction.LEFT), new SensorConfig(Region.H, Direction.RIGHT)))));
-      crossingSensors.put(new Position(1, 9), new CrossingSensor(new Position(4, 9), new ArrayList<SensorConfig>(
-          Arrays.asList(new SensorConfig(Region.D, Direction.LEFT), new SensorConfig(Region.E, Direction.RIGHT)))));
-      crossingSensors.put(new Position(4, 13), new CrossingSensor(new Position(3, 11),
-          new ArrayList<SensorConfig>(Arrays.asList(new SensorConfig(Region.F, Direction.RIGHT)))));
-      crossingSensors.put(new Position(6, 10), new CrossingSensor(new Position(4, 9),
-          new ArrayList<SensorConfig>(Arrays.asList(new SensorConfig(Region.F, Direction.RIGHT)))));
-      crossingSensors.put(new Position(6, 11), new CrossingSensor(new Position(3, 11),
-          new ArrayList<SensorConfig>(Arrays.asList(new SensorConfig(Region.F, Direction.LEFT)))));
-      crossingSensors.put(new Position(7, 9), new CrossingSensor(new Position(4, 9),
-          new ArrayList<SensorConfig>(Arrays.asList(new SensorConfig(Region.F, Direction.LEFT)))));
-      crossingSensors.put(new Position(12, 9), new CrossingSensor(new Position(15, 9),
-          new ArrayList<SensorConfig>(Arrays.asList(new SensorConfig(Region.C, Direction.RIGHT)))));
-      crossingSensors.put(new Position(13, 10), new CrossingSensor(new Position(15, 9),
-          new ArrayList<SensorConfig>(Arrays.asList(new SensorConfig(Region.C, Direction.LEFT)))));
-      crossingSensors.put(new Position(14, 7), new CrossingSensor(new Position(17, 7),
-          new ArrayList<SensorConfig>(Arrays.asList(new SensorConfig(Region.C, Direction.RIGHT)))));
-      crossingSensors.put(new Position(15, 8), new CrossingSensor(new Position(17, 7),
-          new ArrayList<SensorConfig>(Arrays.asList(new SensorConfig(Region.C, Direction.LEFT)))));
-      crossingSensors.put(new Position(18, 9), new CrossingSensor(new Position(15, 9), new ArrayList<SensorConfig>(
-          Arrays.asList(new SensorConfig(Region.D, Direction.RIGHT), new SensorConfig(Region.E, Direction.LEFT)))));
-      crossingSensors.put(new Position(19, 8), new CrossingSensor(new Position(17, 7), new ArrayList<SensorConfig>(
-          Arrays.asList(new SensorConfig(Region.A, Direction.RIGHT), new SensorConfig(Region.B, Direction.LEFT)))));
-
-      endSensors.add(new Position(15, 3));
-      endSensors.add(new Position(15, 5));
-      endSensors.add(new Position(15, 11));
-      endSensors.add(new Position(15, 13));
-
       new Thread(new Train(1, speed1, Region.A)).start();
       new Thread(new Train(2, speed2, Region.G)).start();
     } catch (InterruptedException e) {
       e.printStackTrace();
       System.exit(1);
     }
+  }
+
+  private void initSemaphores() {
+    for (int i = 0; i < Region.MAX.value; ++i) {
+      semaphores.add(new Semaphore(1));
+    }
+  }
+
+  private void initSensors() {
+    addCrossingSensor(new Position(1, 9), new Position(4, 9), new SensorConfig(Region.D, Direction.LEFT),
+        new SensorConfig(Region.E, Direction.RIGHT));
+    addCrossingSensor(new Position(1, 10), new Position(3, 11), new SensorConfig(Region.G, Direction.LEFT),
+        new SensorConfig(Region.H, Direction.RIGHT));
+    addCrossingSensor(new Position(4, 13), new Position(3, 11), new SensorConfig(Region.F, Direction.RIGHT));
+    addCrossingSensor(new Position(6, 10), new Position(4, 9), new SensorConfig(Region.F, Direction.RIGHT));
+    addCrossingSensor(new Position(6, 11), new Position(3, 11), new SensorConfig(Region.F, Direction.LEFT));
+    addCrossingSensor(new Position(7, 9), new Position(4, 9), new SensorConfig(Region.F, Direction.LEFT));
+    addCrossingSensor(new Position(12, 9), new Position(15, 9), new SensorConfig(Region.C, Direction.RIGHT));
+    addCrossingSensor(new Position(13, 10), new Position(15, 9), new SensorConfig(Region.C, Direction.LEFT));
+    addCrossingSensor(new Position(14, 7), new Position(17, 7), new SensorConfig(Region.C, Direction.RIGHT));
+    addCrossingSensor(new Position(15, 8), new Position(17, 7), new SensorConfig(Region.C, Direction.LEFT));
+    addCrossingSensor(new Position(18, 9), new Position(15, 9), new SensorConfig(Region.D, Direction.RIGHT),
+        new SensorConfig(Region.E, Direction.LEFT));
+    addCrossingSensor(new Position(19, 8), new Position(17, 7), new SensorConfig(Region.A, Direction.RIGHT),
+        new SensorConfig(Region.B, Direction.LEFT));
+
+    endSensors.add(new Position(15, 3));
+    endSensors.add(new Position(15, 5));
+    endSensors.add(new Position(15, 11));
+    endSensors.add(new Position(15, 13));
+  }
+
+  private void addCrossingSensor(Position sensorPosition, Position switchPosition, SensorConfig... regions) {
+    crossingSensors.put(sensorPosition, new CrossingSensor(switchPosition, new ArrayList<>(Arrays.asList(regions))));
   }
 }
