@@ -100,44 +100,56 @@ public class Lab1 {
         tsi.setSpeed(id, speed);
         while (true) {
           SensorEvent event = tsi.getSensor(id);
-          if (event.getStatus() == SensorEvent.INACTIVE) {
-            continue;
-          }
           Position position = new Position(event.getXpos(), event.getYpos());
           CrossingSensor crossingSensor = crossingSensors.get(position);
           if (crossingSensor != null) {
-            if (crossingSensor.regions.size() > 1) {
-              if (regions.size() > 1) {
-                semaphores.get(regions.poll().value).release();
-              } else {
-                for (SensorConfig region : crossingSensor.regions) {
-                  Semaphore semaphore = semaphores.get(region.region.value);
-                  if (semaphore.tryAcquire()) {
-                    regions.add(region.region);
-                    tsi.setSwitch(crossingSensor.switchPosition.x, crossingSensor.switchPosition.y,
-                        region.direction == Direction.RIGHT ? TSimInterface.SWITCH_RIGHT : TSimInterface.SWITCH_LEFT);
-                    break;
+            if (regions.size() == 2) {
+              if (event.getStatus() == SensorEvent.INACTIVE) {
+                if (crossingSensor.regions.size() > 1) {
+                  for (SensorConfig region : crossingSensor.regions) {
+                    if (region.region == regions.peek()) {
+                      semaphores.get(regions.poll().value).release();
+                      break;
+                    }
                   }
+                } else if (crossingSensor.regions.size() == 1) {
+                  if (crossingSensor.regions.get(0).region == regions.peek()) {
+                    semaphores.get(regions.poll().value).release();
+                  }
+                } else {
+                  throw new IllegalStateException("Invalid number of regions");
+                }
+              }
+            } else if (regions.size() == 1) {
+              if (event.getStatus() == SensorEvent.ACTIVE) {
+                if (crossingSensor.regions.size() > 1) {
+                  for (SensorConfig region : crossingSensor.regions) {
+                    Semaphore semaphore = semaphores.get(region.region.value);
+                    if (semaphore.tryAcquire()) {
+                      regions.add(region.region);
+                      setSwitch(crossingSensor.switchPosition, region.direction);
+                      break;
+                    }
+                  }
+                } else if (crossingSensor.regions.size() == 1) {
+                  SensorConfig region = crossingSensor.regions.get(0);
+                  Semaphore semaphore = semaphores.get(region.region.value);
+                  if (!semaphore.tryAcquire()) {
+                    tsi.setSpeed(id, 0);
+                    semaphore.acquire();
+                  }
+                  tsi.setSpeed(id, speed);
+                  regions.add(region.region);
+                  setSwitch(crossingSensor.switchPosition, region.direction);
+                } else {
+                  throw new IllegalStateException("Each region must have at least one outgoing edge");
                 }
               }
             } else {
-              if (regions.size() > 1) {
-                semaphores.get(regions.poll().value).release();
-              } else {
-                SensorConfig region = crossingSensor.regions.get(0);
-                Semaphore semaphore = semaphores.get(region.region.value);
-                if (!semaphore.tryAcquire()) {
-                  tsi.setSpeed(id, 0);
-                  semaphore.acquire();
-                }
-                tsi.setSpeed(id, speed);
-                regions.add(region.region);
-                tsi.setSwitch(crossingSensor.switchPosition.x, crossingSensor.switchPosition.y,
-                    region.direction == Direction.RIGHT ? TSimInterface.SWITCH_RIGHT : TSimInterface.SWITCH_LEFT);
-              }
+              throw new IllegalStateException("Invalid number of regions");
             }
           }
-          if (endSensors.contains(position)) {
+          if (event.getStatus() == SensorEvent.ACTIVE && endSensors.contains(position)) {
             tsi.setSpeed(id, 0);
             Thread.sleep(1000 + 20 * Math.abs(speed), 0);
             speed *= -1;
@@ -147,6 +159,11 @@ public class Lab1 {
       } catch (InterruptedException | CommandException e) {
         e.printStackTrace();
       }
+    }
+
+    private void setSwitch(Position position, Direction direction) throws CommandException {
+      tsi.setSwitch(position.x, position.y,
+          direction == Direction.RIGHT ? TSimInterface.SWITCH_RIGHT : TSimInterface.SWITCH_LEFT);
     }
   }
 
@@ -172,27 +189,27 @@ public class Lab1 {
   }
 
   private void initSensors() {
-    addCrossingSensor(new Position(1, 9), new Position(4, 9), new SensorConfig(Region.D, Direction.LEFT),
-        new SensorConfig(Region.E, Direction.RIGHT));
-    addCrossingSensor(new Position(1, 10), new Position(3, 11), new SensorConfig(Region.G, Direction.LEFT),
+    addCrossingSensor(new Position(1, 11), new Position(3, 11), new SensorConfig(Region.G, Direction.LEFT),
         new SensorConfig(Region.H, Direction.RIGHT));
-    addCrossingSensor(new Position(4, 13), new Position(3, 11), new SensorConfig(Region.F, Direction.RIGHT));
-    addCrossingSensor(new Position(6, 10), new Position(4, 9), new SensorConfig(Region.F, Direction.RIGHT));
-    addCrossingSensor(new Position(6, 11), new Position(3, 11), new SensorConfig(Region.F, Direction.LEFT));
-    addCrossingSensor(new Position(7, 9), new Position(4, 9), new SensorConfig(Region.F, Direction.LEFT));
-    addCrossingSensor(new Position(12, 9), new Position(15, 9), new SensorConfig(Region.C, Direction.RIGHT));
-    addCrossingSensor(new Position(13, 10), new Position(15, 9), new SensorConfig(Region.C, Direction.LEFT));
-    addCrossingSensor(new Position(14, 7), new Position(17, 7), new SensorConfig(Region.C, Direction.RIGHT));
-    addCrossingSensor(new Position(15, 8), new Position(17, 7), new SensorConfig(Region.C, Direction.LEFT));
-    addCrossingSensor(new Position(18, 9), new Position(15, 9), new SensorConfig(Region.D, Direction.RIGHT),
+    addCrossingSensor(new Position(2, 9), new Position(4, 9), new SensorConfig(Region.D, Direction.LEFT),
+        new SensorConfig(Region.E, Direction.RIGHT));
+    addCrossingSensor(new Position(3, 13), new Position(3, 11), new SensorConfig(Region.F, Direction.RIGHT));
+    addCrossingSensor(new Position(5, 10), new Position(4, 9), new SensorConfig(Region.F, Direction.RIGHT));
+    addCrossingSensor(new Position(5, 11), new Position(3, 11), new SensorConfig(Region.F, Direction.LEFT));
+    addCrossingSensor(new Position(6, 9), new Position(4, 9), new SensorConfig(Region.F, Direction.LEFT));
+    addCrossingSensor(new Position(13, 9), new Position(15, 9), new SensorConfig(Region.C, Direction.RIGHT));
+    addCrossingSensor(new Position(14, 10), new Position(15, 9), new SensorConfig(Region.C, Direction.LEFT));
+    addCrossingSensor(new Position(15, 7), new Position(17, 7), new SensorConfig(Region.C, Direction.RIGHT));
+    addCrossingSensor(new Position(16, 8), new Position(17, 7), new SensorConfig(Region.C, Direction.LEFT));
+    addCrossingSensor(new Position(17, 9), new Position(15, 9), new SensorConfig(Region.D, Direction.RIGHT),
         new SensorConfig(Region.E, Direction.LEFT));
-    addCrossingSensor(new Position(19, 8), new Position(17, 7), new SensorConfig(Region.A, Direction.RIGHT),
+    addCrossingSensor(new Position(19, 7), new Position(17, 7), new SensorConfig(Region.A, Direction.RIGHT),
         new SensorConfig(Region.B, Direction.LEFT));
 
-    endSensors.add(new Position(15, 3));
-    endSensors.add(new Position(15, 5));
-    endSensors.add(new Position(15, 11));
-    endSensors.add(new Position(15, 13));
+    endSensors.add(new Position(16, 3));
+    endSensors.add(new Position(16, 5));
+    endSensors.add(new Position(16, 11));
+    endSensors.add(new Position(16, 13));
   }
 
   private void addCrossingSensor(Position sensorPosition, Position switchPosition, SensorConfig... regions) {
