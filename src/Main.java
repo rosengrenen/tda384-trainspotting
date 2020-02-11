@@ -7,14 +7,16 @@ import TSim.TSimInterface;
 public class Main {
 
     private static final String TSIM_PATH_ON_LAB_COMPUTERS = "/chalmers/groups/tda381/bin/tsim";
+
     /**
-     * The main method expects 3-4 arguments, e.g.:
-     * - command line: java -cp bin Main "Lab1.map" 5 10 20
-     * - in Eclipse: add them from Run Configurations -> Arguments
+     * The main method expects 3-4 arguments, e.g.: - command line: java -cp bin
+     * Main "Lab1.map" 5 10 20 - in Eclipse: add them from Run Configurations ->
+     * Arguments
      */
     public static void main(String[] args) throws IOException, InterruptedException {
         if (args.length != 3 && args.length != 4) {
-            System.err.println("Main method expects 3-4 arguments: Lab1.map <Train1Speed> <Train2Speed> [SimulatorSpeed]");
+            System.err.println(
+                    "Main method expects 3-4 arguments: Lab1.map <Train1Speed> <Train2Speed> [SimulatorSpeed]");
             System.exit(1);
         }
 

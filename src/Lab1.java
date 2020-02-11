@@ -100,6 +100,7 @@ public class Lab1 {
     @Override
     public void run() {
       try {
+        tsi.setDebug(false);
         tsi.setSpeed(id, speed);
         while (true) {
           SensorEvent event = tsi.getSensor(id);
@@ -111,6 +112,7 @@ public class Lab1 {
           Sensor crossingSensor = crossingSensors.get(position);
           if (crossingSensor != null) {
             // Pop region if leaving
+            boolean hasPopped = false;
             if (crossingSensor.regions.size() > 1) {
               for (Pair<Region, SwitchDirection> region : crossingSensor.regions) {
                 if (region.first == regions.peek()) {
@@ -118,6 +120,7 @@ public class Lab1 {
                   if (region.first.critical) {
                     semaphores.get(region.first.value).release();
                   }
+                  hasPopped = true;
                   break;
                 }
               }
@@ -128,9 +131,15 @@ public class Lab1 {
                 if (region.critical) {
                   semaphores.get(region.value).release();
                 }
+                hasPopped = true;
               }
             } else {
               throw new IllegalStateException("Invalid number of regions");
+            }
+
+            // If a region has been popped, we can't add one from the same event
+            if (hasPopped) {
+              continue;
             }
 
             // Push region if entering
@@ -229,7 +238,7 @@ public class Lab1 {
 
   private void initSensors() {
     addCrossingSensor(new Position(6, 6), null, new Pair<>(Region.C, SwitchDirection.NONE));
-    addCrossingSensor(new Position(1, 7), null, new Pair<>(Region.C, SwitchDirection.NONE));
+    addCrossingSensor(new Position(11, 7), null, new Pair<>(Region.C, SwitchDirection.NONE));
     addCrossingSensor(new Position(14, 7), new Position(17, 7), new Pair<>(Region.D, SwitchDirection.RIGHT));
     addCrossingSensor(new Position(19, 8), new Position(17, 7), new Pair<>(Region.A, SwitchDirection.RIGHT),
         new Pair<>(Region.B, SwitchDirection.LEFT));
