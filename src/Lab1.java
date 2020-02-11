@@ -100,7 +100,6 @@ public class Lab1 {
     @Override
     public void run() {
       try {
-        tsi.setDebug(false);
         tsi.setSpeed(id, speed);
         while (true) {
           SensorEvent event = tsi.getSensor(id);
