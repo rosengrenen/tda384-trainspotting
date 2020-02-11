@@ -1,42 +1,45 @@
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
 
 import TSim.*;
 
 public class Lab1 {
-  private Map<Position, CrossingSensor> crossingSensors = new HashMap<>();
+  private Map<Position, Sensor> crossingSensors = new HashMap<>();
   private Set<Position> endSensors = new HashSet<>();
   private List<Semaphore> semaphores = new ArrayList<>();
 
-  private class SensorConfig {
-    private Region region;
-    private Direction direction;
+  private class Pair<T1, T2> {
+    private T1 first;
+    private T2 second;
 
-    public SensorConfig(Region region, Direction direction) {
-      this.region = region;
-      this.direction = direction;
+    public Pair(T1 first, T2 second) {
+      this.first = first;
+      this.second = second;
     }
   }
 
-  private enum Direction {
-    LEFT, RIGHT
+  private enum SwitchDirection {
+    LEFT, RIGHT, NONE
   }
 
   private enum Region {
-    A(0), B(1), C(2), D(3), E(4), F(5), G(6), H(7), MAX(8);
+    A(0, true), B(-1, false), C(1, true), D(2, true), E(3, true), F(-1, false), G(4, true), H(5, true), I(-1, false),
+    MAX(6, false);
 
     public final int value;
+    public final boolean critical;
 
-    private Region(int value) {
+    private Region(int value, boolean critical) {
       this.value = value;
+      this.critical = critical;
     }
   }
 
@@ -72,11 +75,11 @@ public class Lab1 {
     }
   }
 
-  private class CrossingSensor {
-    List<SensorConfig> regions;
+  private class Sensor {
+    List<Pair<Region, SwitchDirection>> regions;
     Position switchPosition;
 
-    public CrossingSensor(Position switchPosition, List<SensorConfig> regions) {
+    public Sensor(Position switchPosition, List<Pair<Region, SwitchDirection>> regions) {
       this.switchPosition = switchPosition;
       this.regions = regions;
     }
@@ -85,7 +88,7 @@ public class Lab1 {
   private class Train implements Runnable {
     private int id;
     private int speed;
-    private Queue<Region> regions = new ArrayDeque<>();
+    private Deque<Region> regions = new ArrayDeque<>();
     private TSimInterface tsi = TSimInterface.getInstance();
 
     public Train(int id, int speed, Region region) {
@@ -100,56 +103,84 @@ public class Lab1 {
         tsi.setSpeed(id, speed);
         while (true) {
           SensorEvent event = tsi.getSensor(id);
+          if (event.getStatus() != SensorEvent.ACTIVE) {
+            continue;
+          }
+
           Position position = new Position(event.getXpos(), event.getYpos());
-          CrossingSensor crossingSensor = crossingSensors.get(position);
+          Sensor crossingSensor = crossingSensors.get(position);
           if (crossingSensor != null) {
-            if (regions.size() == 2) {
-              if (event.getStatus() == SensorEvent.INACTIVE) {
-                if (crossingSensor.regions.size() > 1) {
-                  for (SensorConfig region : crossingSensor.regions) {
-                    if (region.region == regions.peek()) {
-                      semaphores.get(regions.poll().value).release();
-                      break;
-                    }
+            // Pop region if leaving
+            if (crossingSensor.regions.size() > 1) {
+              for (Pair<Region, SwitchDirection> region : crossingSensor.regions) {
+                if (region.first == regions.peek()) {
+                  regions.poll();
+                  if (region.first.critical) {
+                    semaphores.get(region.first.value).release();
                   }
-                } else if (crossingSensor.regions.size() == 1) {
-                  if (crossingSensor.regions.get(0).region == regions.peek()) {
-                    semaphores.get(regions.poll().value).release();
-                  }
-                } else {
-                  throw new IllegalStateException("Invalid number of regions");
+                  break;
                 }
               }
-            } else if (regions.size() == 1) {
-              if (event.getStatus() == SensorEvent.ACTIVE) {
-                if (crossingSensor.regions.size() > 1) {
-                  for (SensorConfig region : crossingSensor.regions) {
-                    Semaphore semaphore = semaphores.get(region.region.value);
-                    if (semaphore.tryAcquire()) {
-                      regions.add(region.region);
-                      setSwitch(crossingSensor.switchPosition, region.direction);
-                      break;
-                    }
-                  }
-                } else if (crossingSensor.regions.size() == 1) {
-                  SensorConfig region = crossingSensor.regions.get(0);
-                  Semaphore semaphore = semaphores.get(region.region.value);
-                  if (!semaphore.tryAcquire()) {
-                    tsi.setSpeed(id, 0);
-                    semaphore.acquire();
-                  }
-                  tsi.setSpeed(id, speed);
-                  regions.add(region.region);
-                  setSwitch(crossingSensor.switchPosition, region.direction);
-                } else {
-                  throw new IllegalStateException("Each region must have at least one outgoing edge");
+            } else if (crossingSensor.regions.size() == 1) {
+              Region region = crossingSensor.regions.get(0).first;
+              if (region == regions.peek()) {
+                regions.poll();
+                if (region.critical) {
+                  semaphores.get(region.value).release();
                 }
               }
             } else {
               throw new IllegalStateException("Invalid number of regions");
             }
+
+            // Push region if entering
+            if (crossingSensor.regions.size() > 1) {
+              if (crossingSensor.regions.size() > 1) {
+                for (Pair<Region, SwitchDirection> region : crossingSensor.regions) {
+                  if (region.first.critical) {
+                    Semaphore semaphore = semaphores.get(region.first.value);
+                    if (semaphore.tryAcquire()) {
+                      if (region.second == SwitchDirection.NONE) {
+                        regions.addFirst(region.first);
+                      } else {
+                        regions.add(region.first);
+                        setSwitch(crossingSensor.switchPosition, region.second);
+                      }
+                      break;
+                    }
+                  } else {
+                    if (region.second == SwitchDirection.NONE) {
+                      regions.addFirst(region.first);
+                    } else {
+                      regions.add(region.first);
+                      setSwitch(crossingSensor.switchPosition, region.second);
+                    }
+                    break;
+                  }
+                }
+              }
+            } else if (crossingSensor.regions.size() == 1) {
+              Pair<Region, SwitchDirection> region = crossingSensor.regions.get(0);
+              if (region.first.critical) {
+                Semaphore semaphore = semaphores.get(region.first.value);
+                if (!semaphore.tryAcquire()) {
+                  tsi.setSpeed(id, 0);
+                  semaphore.acquire();
+                }
+                tsi.setSpeed(id, speed);
+              }
+              if (region.second == SwitchDirection.NONE) {
+                regions.addFirst(region.first);
+              } else {
+                regions.add(region.first);
+                setSwitch(crossingSensor.switchPosition, region.second);
+              }
+            } else {
+              throw new IllegalStateException("Invalid number of regions");
+            }
           }
-          if (event.getStatus() == SensorEvent.ACTIVE && endSensors.contains(position)) {
+
+          if (endSensors.contains(position)) {
             tsi.setSpeed(id, 0);
             Thread.sleep(1000 + 20 * Math.abs(speed), 0);
             speed *= -1;
@@ -161,9 +192,17 @@ public class Lab1 {
       }
     }
 
-    private void setSwitch(Position position, Direction direction) throws CommandException {
-      tsi.setSwitch(position.x, position.y,
-          direction == Direction.RIGHT ? TSimInterface.SWITCH_RIGHT : TSimInterface.SWITCH_LEFT);
+    private void setSwitch(Position position, SwitchDirection direction) throws CommandException {
+      switch (direction) {
+      case RIGHT:
+        tsi.setSwitch(position.x, position.y, TSimInterface.SWITCH_RIGHT);
+        break;
+      case LEFT:
+        tsi.setSwitch(position.x, position.y, TSimInterface.SWITCH_LEFT);
+        break;
+      case NONE:
+        return;
+      }
     }
   }
 
@@ -173,9 +212,9 @@ public class Lab1 {
       initSensors();
 
       semaphores.get(Region.A.value).acquire();
-      semaphores.get(Region.G.value).acquire();
+      semaphores.get(Region.H.value).acquire();
       new Thread(new Train(1, speed1, Region.A)).start();
-      new Thread(new Train(2, speed2, Region.G)).start();
+      new Thread(new Train(2, speed2, Region.H)).start();
     } catch (InterruptedException e) {
       e.printStackTrace();
       System.exit(1);
@@ -189,30 +228,35 @@ public class Lab1 {
   }
 
   private void initSensors() {
-    addCrossingSensor(new Position(1, 11), new Position(3, 11), new SensorConfig(Region.G, Direction.LEFT),
-        new SensorConfig(Region.H, Direction.RIGHT));
-    addCrossingSensor(new Position(2, 9), new Position(4, 9), new SensorConfig(Region.D, Direction.LEFT),
-        new SensorConfig(Region.E, Direction.RIGHT));
-    addCrossingSensor(new Position(3, 13), new Position(3, 11), new SensorConfig(Region.F, Direction.RIGHT));
-    addCrossingSensor(new Position(5, 10), new Position(4, 9), new SensorConfig(Region.F, Direction.RIGHT));
-    addCrossingSensor(new Position(5, 11), new Position(3, 11), new SensorConfig(Region.F, Direction.LEFT));
-    addCrossingSensor(new Position(6, 9), new Position(4, 9), new SensorConfig(Region.F, Direction.LEFT));
-    addCrossingSensor(new Position(13, 9), new Position(15, 9), new SensorConfig(Region.C, Direction.RIGHT));
-    addCrossingSensor(new Position(14, 10), new Position(15, 9), new SensorConfig(Region.C, Direction.LEFT));
-    addCrossingSensor(new Position(15, 7), new Position(17, 7), new SensorConfig(Region.C, Direction.RIGHT));
-    addCrossingSensor(new Position(16, 8), new Position(17, 7), new SensorConfig(Region.C, Direction.LEFT));
-    addCrossingSensor(new Position(17, 9), new Position(15, 9), new SensorConfig(Region.D, Direction.RIGHT),
-        new SensorConfig(Region.E, Direction.LEFT));
-    addCrossingSensor(new Position(19, 7), new Position(17, 7), new SensorConfig(Region.A, Direction.RIGHT),
-        new SensorConfig(Region.B, Direction.LEFT));
+    addCrossingSensor(new Position(6, 6), null, new Pair<>(Region.C, SwitchDirection.NONE));
+    addCrossingSensor(new Position(1, 7), null, new Pair<>(Region.C, SwitchDirection.NONE));
+    addCrossingSensor(new Position(14, 7), new Position(17, 7), new Pair<>(Region.D, SwitchDirection.RIGHT));
+    addCrossingSensor(new Position(19, 8), new Position(17, 7), new Pair<>(Region.A, SwitchDirection.RIGHT),
+        new Pair<>(Region.B, SwitchDirection.LEFT));
+    addCrossingSensor(new Position(18, 9), new Position(15, 9), new Pair<>(Region.E, SwitchDirection.RIGHT),
+        new Pair<>(Region.F, SwitchDirection.LEFT));
+    addCrossingSensor(new Position(12, 9), new Position(15, 9), new Pair<>(Region.D, SwitchDirection.RIGHT));
+    addCrossingSensor(new Position(7, 9), new Position(4, 9), new Pair<>(Region.G, SwitchDirection.LEFT));
+    addCrossingSensor(new Position(1, 9), new Position(4, 9), new Pair<>(Region.E, SwitchDirection.LEFT),
+        new Pair<>(Region.F, SwitchDirection.RIGHT));
+    addCrossingSensor(new Position(1, 10), new Position(3, 11), new Pair<>(Region.H, SwitchDirection.LEFT),
+        new Pair<>(Region.I, SwitchDirection.RIGHT));
+    addCrossingSensor(new Position(6, 11), new Position(3, 11), new Pair<>(Region.G, SwitchDirection.LEFT));
+    addCrossingSensor(new Position(4, 13), new Position(3, 11), new Pair<>(Region.G, SwitchDirection.RIGHT));
+    addCrossingSensor(new Position(6, 10), new Position(4, 9), new Pair<>(Region.G, SwitchDirection.RIGHT));
+    addCrossingSensor(new Position(13, 10), new Position(15, 9), new Pair<>(Region.D, SwitchDirection.LEFT));
+    addCrossingSensor(new Position(15, 8), new Position(17, 7), new Pair<>(Region.D, SwitchDirection.LEFT));
+    addCrossingSensor(new Position(10, 8), null, new Pair<>(Region.C, SwitchDirection.NONE));
+    addCrossingSensor(new Position(9, 5), null, new Pair<>(Region.C, SwitchDirection.NONE));
 
-    endSensors.add(new Position(16, 3));
-    endSensors.add(new Position(16, 5));
-    endSensors.add(new Position(16, 11));
-    endSensors.add(new Position(16, 13));
+    endSensors.add(new Position(15, 3));
+    endSensors.add(new Position(15, 5));
+    endSensors.add(new Position(15, 11));
+    endSensors.add(new Position(15, 13));
   }
 
-  private void addCrossingSensor(Position sensorPosition, Position switchPosition, SensorConfig... regions) {
-    crossingSensors.put(sensorPosition, new CrossingSensor(switchPosition, new ArrayList<>(Arrays.asList(regions))));
+  private void addCrossingSensor(Position sensorPosition, Position switchPosition,
+      Pair<Region, SwitchDirection>... regions) {
+    crossingSensors.put(sensorPosition, new Sensor(switchPosition, new ArrayList<>(Arrays.asList(regions))));
   }
 }
